@@ -30,39 +30,41 @@ class DispatcherTest {
 
     @Test
     fun `when launching within dispatcher expect its usage`() = runBlocking {
+        var dispatcher: CoroutineDispatcher? = null
+
         scope.launch(NamedDispatcher("scope dispatcher")) {
-            assertEquals(
-                "scope dispatcher",
-                coroutineContext[CoroutineDispatcher].testName
-            )
+            dispatcher = coroutineContext[CoroutineDispatcher]
         }.join()
+
+        assertEquals("scope dispatcher", dispatcher.testName)
     }
 
     @Test
     fun `when wrapped withing inner dispatcher expect its usage`() = runBlocking {
+        var dispatcher: CoroutineDispatcher? = null
+
         scope.launch(NamedDispatcher("scope dispatcher")) {
-            val actual = withContext(NamedDispatcher("inner dispatcher")) {
-                coroutineContext[CoroutineDispatcher].testName
+            dispatcher = withContext(NamedDispatcher("inner dispatcher")) {
+                coroutineContext[CoroutineDispatcher]
             }
-            assertEquals(
-                "inner dispatcher",
-                actual
-            )
         }.join()
+
+        assertEquals("inner dispatcher", dispatcher.testName)
     }
 
     @Test
     fun `when switched to original context expect old dispatcher`() = runBlocking {
+        var dispatcher: CoroutineDispatcher? = null
         scope.launch(NamedDispatcher("scope dispatcher")) {
             withContext(NamedDispatcher("inner dispatcher")) {
                 coroutineContext[CoroutineDispatcher].testName
             }
 
-            assertEquals(
-                "scope dispatcher",
-                coroutineContext[CoroutineDispatcher].testName
-            )
+            dispatcher = coroutineContext[CoroutineDispatcher]
+
         }.join()
+
+        assertEquals("scope dispatcher", dispatcher.testName)
     }
 
     @Test
@@ -79,13 +81,16 @@ class DispatcherTest {
     @Test
     fun `switching unconfined dispatcher various execution threads`() = runBlocking {
         val startThread = Thread.currentThread()
+        var withContextThread: Thread? = null
+
         scope.launch(Dispatchers.Unconfined) {
             assertSame(startThread, currentThread)
-            val withContextThread = withContext(NamedDispatcher("inner dispatcher")) {
+            withContextThread = withContext(NamedDispatcher("inner dispatcher")) {
                 currentThread
             }
-            assertSame(withContextThread, currentThread)
         }.join()
+
+        assertSame(withContextThread, currentThread)
     }
 }
 

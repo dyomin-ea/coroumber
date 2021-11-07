@@ -129,4 +129,36 @@ class ExceptionHandlingTest {
         outerHandler.assertCalled(TestException)
         innerHandler.assertNotCalled()
     }
+
+    @Test
+    fun `exception are propagated to parent scope`() = runBlocking {
+        val coroutineScope = CoroutineScope(SupervisorJob())
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            launch(innerHandler) {
+                throw TestException
+            }.join()
+        }.join()
+
+        outerHandler.assertCalled(TestException)
+        innerHandler.assertNotCalled()
+    }
+
+    @Test
+    fun `supervisor job skips exception propagation to parent scope`() = runBlocking {
+        val coroutineScope = CoroutineScope(SupervisorJob())
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            launch(SupervisorJob() + innerHandler) {
+                throw TestException
+            }.join()
+        }.join()
+
+        outerHandler.assertNotCalled()
+        innerHandler.assertCalled(TestException)
+    }
 }

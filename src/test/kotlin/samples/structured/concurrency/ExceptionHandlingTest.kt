@@ -1,27 +1,38 @@
 package samples.structured.concurrency
 
 import kotlinx.coroutines.*
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import samples.TestException
+import samples.TestExceptionHandler
+import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ExceptionHandlingTest {
-    // expect fail with TestException
-    // gonna catch em all
+
     @Test
-    fun `wrapping with try expect no effect`() = runBlocking {
-        try {
-            launch {
-                throw TestException
-            }.join()
-        } catch (e: TestException) {
-            //ignore
+    fun `wrapping with try expect no effect`() {
+        Assertions.assertThrows(TestException::class.java) {
+            runBlocking {
+                try {
+                    launch {
+                        throw TestException
+                    }.join()
+                } catch (e: TestException) {
+                    Assertions.fail<Nothing>()
+                }
+            }
         }
     }
 
+    /**
+     * Expecting
+     * Exception in thread "..." samples.TestException
+     */
     @Test
-    fun `sample 0`() = runBlocking {
+    fun `catch was invoked but exception was propagated to outer scope`() = runBlocking {
         val coroutineScope = CoroutineScope(Job())
+        var th: Throwable? = null
         coroutineScope.launch {
             val deferred = async {
                 throw TestException
@@ -30,19 +41,21 @@ class ExceptionHandlingTest {
             try {
                 deferred.await()
             } catch (e: TestException) {
-                println(1)
+                th = e
             }
         }.join()
+
+        assertEquals(TestException, th)
     }
-    /*
-    * Exception in thread "..." samples.TestException
-    * */
 
     @Test
-    fun `sample 1`() = runBlocking {
+    fun `exception was handled by both CEH & catch block`() = runBlocking {
         val coroutineScope = CoroutineScope(Job())
-        val handler = CoroutineExceptionHandler { _, _ -> println(1) }
-        coroutineScope.launch(handler) {
+        val outerHandler = TestExceptionHandler()
+
+        var th: Throwable? = null
+
+        coroutineScope.launch(outerHandler) {
             val deferred = async {
                 throw TestException
             }
@@ -50,46 +63,102 @@ class ExceptionHandlingTest {
             try {
                 deferred.await()
             } catch (e: TestException) {
-                println(2)
+                th = e
             }
         }.join()
+
+        outerHandler.assertCalled(TestException)
+        assertEquals(TestException, th)
     }
-    /*
-    * 2
-    * 1
-    * */
 
     @Test
-    fun `sample 2`() = runBlocking {
+    fun `top level exception was handled only catch block`() = runBlocking {
         val coroutineScope = CoroutineScope(Job())
-        val handler = CoroutineExceptionHandler { _, _ -> println(1) }
-        val handler2 = CoroutineExceptionHandler { _, _ -> println(2) }
-        coroutineScope.launch(handler) {
-            val deferred = async(handler2) {
+        val outerHandler = TestExceptionHandler()
+
+        var th: Throwable? = null
+
+        coroutineScope.launch(outerHandler) {
+            val deferred = coroutineScope.async {
+                throw TestException
+            }
+
+            try {
+                deferred.await()
+            } catch (e: TestException) {
+                th = e
+            }
+        }.join()
+
+        outerHandler.assertNotCalled()
+        assertEquals(TestException, th)
+    }
+
+    @Test
+    fun `sibling async ignores handler`() = runBlocking {
+        val coroutineScope = CoroutineScope(Job())
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            val deferred = async(innerHandler) {
                 throw TestException
             }
 
             deferred.await()
         }.join()
+
+        outerHandler.assertCalled(TestException)
+        innerHandler.assertNotCalled()
     }
-    /*
-    * 1
-    * */
 
     @Test
-    fun `sample 3`() = runBlocking {
+    fun `flat async ignores handler`() = runBlocking {
         val coroutineScope = CoroutineScope(Job())
-        val handler = CoroutineExceptionHandler { _, _ -> println(1) }
-        val handler2 = CoroutineExceptionHandler { _, _ -> println(2) }
-        coroutineScope.launch(handler) {
-            val deferred = coroutineScope.async(handler2) {
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            val deferred = coroutineScope.async(innerHandler) {
                 throw TestException
             }
 
             deferred.await()
         }.join()
+
+        outerHandler.assertCalled(TestException)
+        innerHandler.assertNotCalled()
     }
-    /*
-    * 1
-    * */
+
+    @Test
+    fun `exception are propagated to parent scope`() = runBlocking {
+        val coroutineScope = CoroutineScope(SupervisorJob())
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            launch(innerHandler) {
+                throw TestException
+            }.join()
+        }.join()
+
+        outerHandler.assertCalled(TestException)
+        innerHandler.assertNotCalled()
+    }
+
+    @Test
+    fun `supervisor job skips exception propagation to parent scope`() = runBlocking {
+        val coroutineScope = CoroutineScope(SupervisorJob())
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        coroutineScope.launch(outerHandler) {
+            launch(SupervisorJob() + innerHandler) {
+                throw TestException
+            }.join()
+        }.join()
+
+        outerHandler.assertNotCalled()
+        innerHandler.assertCalled(TestException)
+    }
 }

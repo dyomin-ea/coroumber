@@ -161,4 +161,22 @@ class ExceptionHandlingTest {
         outerHandler.assertNotCalled()
         innerHandler.assertCalled(TestException)
     }
+
+    @Test
+    fun `async ignores exception handler`() = runBlocking {
+        val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val outerHandler = TestExceptionHandler()
+        val innerHandler = TestExceptionHandler()
+
+        val deferred = coroutineScope.async(outerHandler) {
+            throw TestException
+        }
+
+        coroutineScope.launch(innerHandler) {
+            deferred.await()
+        }
+
+        outerHandler.assertNotCalled()
+        innerHandler.assertCalled(TestException)
+    }
 }

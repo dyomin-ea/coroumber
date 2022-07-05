@@ -7,7 +7,6 @@ import samples.TestException
 import samples.TestExceptionHandler
 import kotlin.test.assertEquals
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ExceptionHandlingTest {
 
     @Test
@@ -160,5 +159,31 @@ class ExceptionHandlingTest {
 
         outerHandler.assertNotCalled()
         innerHandler.assertCalled(TestException)
+    }
+
+    @Test
+    fun `async wrapping unit calls throws exceptions and propagates exc to parent scope`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob())
+        val handler = TestExceptionHandler()
+
+        var catchCall = false
+
+        fun unitMethod() {
+            throw TestException
+        }
+
+        scope.launch(handler) {
+            val deferred = async { unitMethod() }
+
+            try {
+            	deferred.await()
+            } catch (e: TestException) {
+                catchCall = true
+            }
+        }.join()
+
+        handler.assertCalled(TestException)
+        assert(catchCall)
+        assert(scope.isActive)
     }
 }

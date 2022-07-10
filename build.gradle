@@ -12,6 +12,7 @@ repositories {
 
 dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.3'
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
 }
 
@@ -21,12 +22,12 @@ test {
 
 compileKotlin.kotlinOptions {
     jvmTarget = '11'
-    freeCompilerArgs += "-Xopt-in=kotlin.RequiresOptIn"
+    freeCompilerArgs += "-opt-in=kotlin.RequiresOptIn"
 }
 
 compileTestKotlin.kotlinOptions {
     jvmTarget = '11'
-    freeCompilerArgs += "-Xopt-in=kotlin.RequiresOptIn"
+    freeCompilerArgs += "-opt-in=kotlin.RequiresOptIn"
 }
 
 application {

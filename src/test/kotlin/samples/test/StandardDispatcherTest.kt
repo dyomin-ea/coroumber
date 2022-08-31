@@ -115,7 +115,7 @@ class StandardDispatcherTest {
 		}
 		advanceUntilIdle()
 
-		println("time: $currentTime")
-		println(values)
+		Assertions.assertEquals(84L, currentTime)
+		Assertions.assertEquals(listOf(42, 42), values)
 	}
 }
